@@ -131,6 +131,7 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
                         }
                     }
                 }
+				
                 validCaptureSession.commitConfiguration()
             }
             _cameraDevice = newCameraDevice
@@ -174,10 +175,10 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
             }
         }
     }
-
+	
     // MARK: - Private properties
 
-    private weak var embedingView: UIView?
+    private weak var embeddingView: UIView?
     private var videoCompletition: ((videoURL: NSURL, error: NSError?) -> Void)?
 
     private var sessionQueue: dispatch_queue_t = dispatch_queue_create("CameraSessionQueue", DISPATCH_QUEUE_SERIAL)
@@ -197,54 +198,67 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
     private var _flashMode = CameraFlashMode.Off
     private var _cameraOutputMode = CameraOutputMode.StillImage
     private var _cameraOutputQuality = CameraOutputQuality.High
-
+	
     private var tempFilePath: NSURL = {
-        let tempPath = NSTemporaryDirectory().stringByAppendingPathComponent("tempMovie").stringByAppendingPathExtension("mp4")
-        if NSFileManager.defaultManager().fileExistsAtPath(tempPath!) {
+		let tempPath = "\(NSTemporaryDirectory())/tempMovie.mp4"
+        if NSFileManager.defaultManager().fileExistsAtPath(tempPath) {
             do {
-                try NSFileManager.defaultManager().removeItemAtPath(tempPath!)
+                try NSFileManager.defaultManager().removeItemAtPath(tempPath)
             } catch {
                 
             }
         }
-        return NSURL(fileURLWithPath: tempPath!)
+        return NSURL(fileURLWithPath: tempPath)
         }()
-    
-    
+	
+
     // MARK: - CameraManager
 
     /**
-    Inits a capture session and adds a preview layer to the given view. Preview layer bounds will automaticaly be set to match given view. Default session is initialized with still image output.
-
-    :param: view The view you want to add the preview layer to
-    :param: cameraOutputMode The mode you want capturesession to run image / video / video and microphone
-    
-    :returns: Current state of the camera: Ready / AccessDenied / NoDeviceFound / NotDetermined.
+	Inits a capture session and adds a preview layer to the given view. Preview layer bounds will automaticaly be set to match given view. Default session is initialized with still image output.
+	
+	:param: view The view you want to add the preview layer to
+	:param: cameraOutputMode The mode you want capturesession to run image / video / video and microphone
+	
+	:returns: Current state of the camera: Ready / AccessDenied / NoDeviceFound / NotDetermined.
     */
-    public func addPreviewLayerToView(view: UIView) -> CameraState
+	public func addPreviewLayerToView(view: UIView) -> CameraState
     {
-        return self.addPreviewLayerToView(view, newCameraOutputMode: _cameraOutputMode)
+		return self.addPreviewLayerToView(view, atZIndex: nil, newCameraOutputMode: _cameraOutputMode)
     }
+	
+	public func addPreviewLayerToView(view: UIView, atZIndex index: UInt32) -> CameraState
+	{
+		return self.addPreviewLayerToView(view, atZIndex: index, newCameraOutputMode: _cameraOutputMode)
+	}
+	
     public func addPreviewLayerToView(view: UIView, newCameraOutputMode: CameraOutputMode) -> CameraState
     {
-        if self._canLoadCamera() {
-            if let _ = self.embedingView {
-                if let validPreviewLayer = self.previewLayer {
-                    validPreviewLayer.removeFromSuperlayer()
-                }
-            }
-            if self.cameraIsSetup {
-                self._addPreeviewLayerToView(view)
-                self.cameraOutputMode = newCameraOutputMode
-            } else {
-                self._setupCamera({ Void -> Void in
-                    self._addPreeviewLayerToView(view)
-                    self.cameraOutputMode = newCameraOutputMode
-                })
-            }
-        }
-        return self._checkIfCameraIsAvailable()
-    }
+		return self.addPreviewLayerToView(view, atZIndex: nil, newCameraOutputMode: newCameraOutputMode)
+	}
+	
+	public func addPreviewLayerToView(view: UIView, atZIndex index: UInt32?, newCameraOutputMode: CameraOutputMode) -> CameraState
+	{
+		if self._canLoadCamera() {
+			if let _ = self.embeddingView {
+				if let validPreviewLayer = self.previewLayer {
+					validPreviewLayer.removeFromSuperlayer()
+				}
+			}
+			if self.cameraIsSetup {
+				self.previewLayerZIndex = index
+				self._addPreviewLayerToView(view, atZIndex: index)
+				self.cameraOutputMode = newCameraOutputMode
+			} else {
+				self._setupCamera({ Void -> Void in
+					self.previewLayerZIndex = index
+					self._addPreviewLayerToView(view, atZIndex: index)
+					self.cameraOutputMode = newCameraOutputMode
+				})
+			}
+		}
+		return self._checkIfCameraIsAvailable()
+	}
 
     /**
     Asks the user for camera permissions. Only works if the permissions are not yet determined. Note that it'll also automaticaly ask about the microphone permissions if you selected VideoWithMic output.
@@ -295,8 +309,8 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
                     self.stopAndRemoveCaptureSession()
                 }
                 self._setupCamera({Void -> Void in
-                    if let validEmbedingView = self.embedingView {
-                        self._addPreeviewLayerToView(validEmbedingView)
+                    if let validembeddingView = self.embeddingView {
+						self._addPreviewLayerToView(validembeddingView, atZIndex: self.previewLayerZIndex)
                     }
                     self._startFollowingDeviceOrientation()
                 })
@@ -423,7 +437,7 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
         self.cameraOutputQuality = CameraOutputQuality(rawValue: (self.cameraOutputQuality.rawValue+1)%3)!
         return self.cameraOutputQuality
     }
-    
+	
     // MARK: - AVCaptureFileOutputRecordingDelegate
 
     public func captureOutput(captureOutput: AVCaptureFileOutput!, didStartRecordingToOutputFileAtURL fileURL: NSURL!, fromConnections connections: [AnyObject]!)
@@ -538,21 +552,23 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
             currentConnection = self._getMovieOutput().connectionWithMediaType(AVMediaTypeVideo)
         }
         if let validPreviewLayer = self.previewLayer {
-            if let validPreviewLayerConnection = validPreviewLayer.connection {
-                if validPreviewLayerConnection.supportsVideoOrientation {
-                    validPreviewLayerConnection.videoOrientation = self._currentVideoOrientation()
-                }
-            }
-            if let validOutputLayerConnection = currentConnection {
-                if validOutputLayerConnection.supportsVideoOrientation {
-                    validOutputLayerConnection.videoOrientation = self._currentVideoOrientation()
-                }
-            }
-            dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                if let validEmbedingView = self.embedingView {
-                    validPreviewLayer.frame = validEmbedingView.bounds
-                }
-            })
+			if let validOutputLayerConnection = currentConnection {
+				if validOutputLayerConnection.supportsVideoOrientation {
+					validOutputLayerConnection.videoOrientation = self._currentVideoOrientation()
+				}
+			}
+			if self.autoAdjustPreviewOrientation {
+				if let validPreviewLayerConnection = validPreviewLayer.connection {
+					if validPreviewLayerConnection.supportsVideoOrientation {
+						validPreviewLayerConnection.videoOrientation = self._currentVideoOrientation()
+					}
+				}
+			}
+			dispatch_async(dispatch_get_main_queue(), { () -> Void in
+				if let validembeddingView = self.embeddingView {
+					validPreviewLayer.frame = validembeddingView.bounds
+				}
+			})
         }
     }
 
@@ -563,6 +579,8 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
             return .LandscapeRight
         case .LandscapeRight:
             return .LandscapeLeft
+		case .PortraitUpsideDown:
+			return .PortraitUpsideDown
         default:
             return .Portrait
         }
@@ -592,6 +610,7 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
                 self._updateCameraQualityMode(self.cameraOutputQuality)
                 validCaptureSession.startRunning()
                 self._startFollowingDeviceOrientation()
+				self._startFollowingConfigurationChanges()
                 self.cameraIsSetup = true
                 self._orientationChanged()
                 
@@ -615,17 +634,25 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
             self.cameraIsObservingDeviceOrientation = false
         }
     }
-
-    private func _addPreeviewLayerToView(view: UIView)
+	
+	private func _addPreviewLayerToView(view: UIView, atZIndex index: UInt32?)
     {
-        self.embedingView = view
+        self.embeddingView = view
         dispatch_async(dispatch_get_main_queue(), { () -> Void in
             guard let _ = self.previewLayer else {
                 return
             }
             self.previewLayer!.frame = view.layer.bounds
             view.clipsToBounds = true
-            view.layer.addSublayer(self.previewLayer!)
+			
+			if let index = index {
+				
+				view.layer.insertSublayer(self.previewLayer!, atIndex: index)
+			}
+			else {
+				
+				view.layer.addSublayer(self.previewLayer!)
+			}
         })
     }
 
@@ -826,5 +853,213 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
     deinit {
         self.stopAndRemoveCaptureSession()
         self._stopFollowingDeviceOrientation()
+		self._stopFollowingConfigurationChanges()
     }
+	
+	
+	// MARK: - Suggested additions
+	
+	/// Property that defines whether the camera manager should take care of adjusting the preview layer's orientation when the device orientation changes
+	public var autoAdjustPreviewOrientation: Bool = true
+	
+	/**
+	Switches between the current and specified camera using a flip animation similar to the one used in the iOS stock camera app
+	*/
+	public func setCameraDeviceWithFlipAnimation(newCameraDevice: CameraDevice) {
+		
+		if transitionAnimating {
+			
+			return
+		}
+		
+		if let validCaptureSession = self.captureSession {
+			
+			var inputToRemove: AVCaptureInput?
+			var inputToAdd: AVCaptureInput?
+			
+			let inputs = validCaptureSession.inputs as! [AVCaptureInput]
+			
+			switch newCameraDevice {
+			case .Front:
+				if self.hasFrontCamera {
+					if let validBackDevice = self.rearCamera {
+						if inputs.contains(validBackDevice) {
+							inputToRemove = validBackDevice
+						}
+					}
+					if let validFrontDevice = self.frontCamera {
+						if !inputs.contains(validFrontDevice) {
+							inputToAdd = validFrontDevice
+						}
+					}
+				}
+			case .Back:
+				if let validFrontDevice = self.frontCamera {
+					if inputs.contains(validFrontDevice) {
+						inputToRemove = validFrontDevice
+					}
+				}
+				if let validBackDevice = self.rearCamera {
+					if !inputs.contains(validBackDevice) {
+						inputToAdd = validBackDevice
+					}
+				}
+			}
+			
+			if let inputToRemove = inputToRemove, let inputToAdd = inputToAdd {
+				
+				newConfigurationIsLive = false
+				
+				if let validEmbeddingView = self.embeddingView {
+					if let validPreviewLayer = self.previewLayer {
+						
+						var tempView: UIView!
+						
+						if _blurSupported() {
+							
+							let blurEffect = UIBlurEffect(style: .Light)
+							tempView = UIVisualEffectView(effect: blurEffect)
+							tempView.frame = validEmbeddingView.bounds
+						}
+						else {
+							
+							tempView = UIView(frame: validEmbeddingView.bounds)
+							tempView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
+						}
+						
+						validEmbeddingView.insertSubview(tempView, atIndex: Int(validPreviewLayer.zPosition + 1))
+						
+						cameraTransitionView = validEmbeddingView.snapshotViewAfterScreenUpdates(true)
+						
+						validEmbeddingView.insertSubview(cameraTransitionView!, atIndex: Int(validEmbeddingView.layer.zPosition + 1))
+						tempView.removeFromSuperview()
+						
+						transitionAnimating = true
+						
+						validPreviewLayer.opacity = 0.0
+						
+						performSelector("_flipCameraTransitionView", withObject: nil, afterDelay: 0.00001)
+					}
+					
+					dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)) {
+						
+						validCaptureSession.beginConfiguration()
+						validCaptureSession.removeInput(inputToRemove)
+						validCaptureSession.addInput(inputToAdd)
+						validCaptureSession.commitConfiguration()
+					}
+				}
+			}
+			_cameraDevice = newCameraDevice
+		}
+	}
+	
+	private var previewLayerZIndex: UInt32?
+	private var cameraTransitionView: UIView?
+	private var transitionAnimating = false
+	private var newConfigurationIsLive = false
+	
+	private func _startFollowingConfigurationChanges()
+	{
+		NSNotificationCenter.defaultCenter().addObserver(self, selector: "_newConfigurationDidBecomeLive", name: "ConfigurationDidBecomeLive", object: nil)
+	}
+	
+	private func _stopFollowingConfigurationChanges()
+	{
+		
+		NSNotificationCenter.defaultCenter().removeObserver(self, name: "ConfigurationDidBecomeLive", object: nil)
+	}
+	
+	@objc private func _flipCameraTransitionView() {
+		
+		if let cameraTransitionView = cameraTransitionView {
+			
+			UIView.transitionWithView(cameraTransitionView,
+				duration: 0.5,
+				options: UIViewAnimationOptions.TransitionFlipFromLeft,
+				animations: nil,
+				completion: { (finished) -> Void in
+					
+					if (self.newConfigurationIsLive) {
+						
+						self._removeCameraTransistionView()
+					}
+			})
+		}
+	}
+	
+	private func _removeCameraTransistionView() {
+		
+		if let cameraTransitionView = cameraTransitionView {
+			if let validPreviewLayer = self.previewLayer {
+				
+				validPreviewLayer.opacity = 1.0
+			}
+			
+			UIView.animateWithDuration(0.5,
+				animations: { () -> Void in
+					
+					cameraTransitionView.alpha = 0.0
+					
+				}, completion: { (finished) -> Void in
+					
+					self.transitionAnimating = false
+					
+					cameraTransitionView.removeFromSuperview()
+					self.cameraTransitionView = nil
+			})
+		}
+	}
+	
+	@objc private func _newConfigurationDidBecomeLive() {
+		
+		if !self.transitionAnimating {
+			
+			dispatch_async(dispatch_get_main_queue()) { () -> Void in
+				
+				self._removeCameraTransistionView()
+			}
+		}
+		
+		self.newConfigurationIsLive = true
+	}
+	
+	// Determining whether the current device actually supports blurring
+	// As seen on: http://stackoverflow.com/a/29997626/2269387
+	private func _blurSupported() -> Bool {
+		var supported = Set<String>()
+		supported.insert("iPad")
+		supported.insert("iPad1,1")
+		supported.insert("iPhone1,1")
+		supported.insert("iPhone1,2")
+		supported.insert("iPhone2,1")
+		supported.insert("iPhone3,1")
+		supported.insert("iPhone3,2")
+		supported.insert("iPhone3,3")
+		supported.insert("iPod1,1")
+		supported.insert("iPod2,1")
+		supported.insert("iPod2,2")
+		supported.insert("iPod3,1")
+		supported.insert("iPod4,1")
+		supported.insert("iPad2,1")
+		supported.insert("iPad2,2")
+		supported.insert("iPad2,3")
+		supported.insert("iPad2,4")
+		supported.insert("iPad3,1")
+		supported.insert("iPad3,2")
+		supported.insert("iPad3,3")
+		
+		return !supported.contains(_hardwareString())
+	}
+	
+	private func _hardwareString() -> String {
+		var name: [Int32] = [CTL_HW, HW_MACHINE]
+		var size: Int = 2
+		sysctl(&name, 2, nil, &size, &name, 0)
+		var hw_machine = [CChar](count: Int(size), repeatedValue: 0)
+		sysctl(&name, 2, &hw_machine, &size, &name, 0)
+		
+		let hardware: String = String.fromCString(hw_machine)!
+		return hardware
+	}
 }

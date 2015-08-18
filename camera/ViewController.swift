@@ -70,6 +70,7 @@ class ViewController: UIViewController {
     private func addCameraToView()
     {
         self.cameraManager.addPreviewLayerToView(self.cameraView, newCameraOutputMode: CameraOutputMode.VideoWithMic)
+		self.cameraView.backgroundColor = UIColor.blackColor()
         CameraManager.sharedInstance.showErrorBlock = { (erTitle: String, erMessage: String) -> Void in            
             
 //            var alertController = UIAlertController(title: erTitle, message: erMessage, preferredStyle: .Alert)
@@ -147,7 +148,9 @@ class ViewController: UIViewController {
     
     @IBAction func changeCameraDevice(sender: UIButton)
     {
-        self.cameraManager.cameraDevice = self.cameraManager.cameraDevice == CameraDevice.Front ? CameraDevice.Back : CameraDevice.Front
+		let newCameraDevice = self.cameraManager.cameraDevice == CameraDevice.Front ? CameraDevice.Back : CameraDevice.Front
+		self.cameraManager.setCameraDeviceWithFlipAnimation(newCameraDevice)
+//        self.cameraManager.cameraDevice = self.cameraManager.cameraDevice == CameraDevice.Front ? CameraDevice.Back : CameraDevice.Front
         switch (self.cameraManager.cameraDevice) {
         case .Front:
             sender.setTitle("Front", forState: UIControlState.Normal)
