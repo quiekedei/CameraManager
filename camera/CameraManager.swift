@@ -348,33 +348,38 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
                 dispatch_async(self.sessionQueue, {
                     self._getStillImageOutput().captureStillImageAsynchronouslyFromConnection(self._getStillImageOutput().connectionWithMediaType(AVMediaTypeVideo), completionHandler: { [weak self] (sample: CMSampleBuffer!, error: NSError!) -> Void in
 						if let weakSelf = self {
-							weakSelf._setPreviewLayerOpacity(1.0, animated: true, completion: nil)
+							weakSelf._setPreviewLayerOpacity(1.0, animated: true) {
+								if (error != nil) {
+									dispatch_async(dispatch_get_main_queue(), {
+										weakSelf._show(NSLocalizedString("Error", comment:""), message: error.localizedDescription)
+									})
+									imageCompletition(nil, error)
+								} else {
+									let imageData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(sample)
+									if weakSelf.writeFilesToPhoneLibrary {
+										if let validLibrary = weakSelf.library {
+											validLibrary.writeImageDataToSavedPhotosAlbum(imageData, metadata:nil, completionBlock: {
+												(picUrl, error) -> Void in
+												if (error != nil) {
+													dispatch_async(dispatch_get_main_queue(), {
+														weakSelf._show(NSLocalizedString("Error", comment:""), message: error.localizedDescription)
+													})
+												}
+											})
+										}
+									}
+									imageCompletition(UIImage(data: imageData), nil)
+								}
+							}
 						}
-                        if (error != nil) {
-                            dispatch_async(dispatch_get_main_queue(), {
-                                if let weakSelf = self {
-                                    weakSelf._show(NSLocalizedString("Error", comment:""), message: error.localizedDescription)
-                                }
-                            })
-                            imageCompletition(nil, error)
-                        } else {
-                            let imageData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(sample)
-                            if let weakSelf = self {
-                                if weakSelf.writeFilesToPhoneLibrary {
-                                    if let validLibrary = weakSelf.library {
-                                        validLibrary.writeImageDataToSavedPhotosAlbum(imageData, metadata:nil, completionBlock: {
-                                            (picUrl, error) -> Void in
-                                            if (error != nil) {
-                                                dispatch_async(dispatch_get_main_queue(), {
-                                                    weakSelf._show(NSLocalizedString("Error", comment:""), message: error.localizedDescription)
-                                                })
-                                            }
-                                        })
-                                    }
-                                }
-                            }
-                            imageCompletition(UIImage(data: imageData), nil)
-                        }
+						else {
+							if error != nil {
+								imageCompletition(nil, error)
+							}
+							else {
+								imageCompletition(UIImage(data: AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(sample)), nil)
+							}
+						}
                     })
                 })
             } else {
