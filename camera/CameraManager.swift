@@ -344,8 +344,12 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
     {
         if self.cameraIsSetup {
             if self.cameraOutputMode == .StillImage {
+				self._setPreviewLayerOpacity(0.0, animated: true, completion: nil)
                 dispatch_async(self.sessionQueue, {
                     self._getStillImageOutput().captureStillImageAsynchronouslyFromConnection(self._getStillImageOutput().connectionWithMediaType(AVMediaTypeVideo), completionHandler: { [weak self] (sample: CMSampleBuffer!, error: NSError!) -> Void in
+						if let weakSelf = self {
+							weakSelf._setPreviewLayerOpacity(1.0, animated: true, completion: nil)
+						}
                         if (error != nil) {
                             dispatch_async(dispatch_get_main_queue(), {
                                 if let weakSelf = self {
@@ -1024,6 +1028,28 @@ public class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
 		self.newConfigurationIsLive = true
 	}
 	
+	private func _setPreviewLayerOpacity(opacity: Float, animated: Bool, completion: (() -> Void)?) {
+		
+		if let validPreviewLayer = self.previewLayer {
+			
+			dispatch_async(dispatch_get_main_queue(), { () -> Void in
+				
+				let duration = animated ? 0.1 : 0.0
+				
+				CATransaction.begin()
+				
+				if let completion = completion {
+					
+					CATransaction.setCompletionBlock(completion)
+				}
+				
+				CATransaction.setAnimationDuration(duration)
+				validPreviewLayer.opacity = opacity
+				CATransaction.commit()
+			})
+		}
+	}
+
 	// Determining whether the current device actually supports blurring
 	// As seen on: http://stackoverflow.com/a/29997626/2269387
 	private func _blurSupported() -> Bool {

@@ -109,13 +109,13 @@ class ViewController: UIViewController {
         switch (self.cameraManager.cameraOutputMode) {
         case .StillImage:
             self.cameraManager.capturePictureWithCompletition({ (image, error) -> Void in
-                let vc: ImageViewController? = self.storyboard?.instantiateViewControllerWithIdentifier("ImageVC") as? ImageViewController
-                if let validVC: ImageViewController = vc {
-                    if let capturedImage = image {
-                        validVC.image = capturedImage
-                        self.navigationController?.pushViewController(validVC, animated: true)
-                    }
-                }
+//                let vc: ImageViewController? = self.storyboard?.instantiateViewControllerWithIdentifier("ImageVC") as? ImageViewController
+//                if let validVC: ImageViewController = vc {
+//                    if let capturedImage = image {
+//                        validVC.image = capturedImage
+//                        self.navigationController?.pushViewController(validVC, animated: true)
+//                    }
+//                }
             })
         case .VideoWithMic, .VideoOnly:
             sender.selected = !sender.selected
